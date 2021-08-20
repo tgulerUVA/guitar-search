@@ -14,6 +14,7 @@ import os
 import requests
 import json
 from bs4 import BeautifulSoup
+from datetime import date, timedelta
 
 # function to extract html as  beatiful soup object given url and headers
 def extract_html(url, headers=None):
@@ -77,6 +78,20 @@ def conditional_bs4_results_text(bs, tag, condition_key, condition_value):
 
 
 def get_table(urls, headers=None):
+    '''
+    
+
+    Parameters
+    ----------
+    urls : list of individual posting urls
+    headers : dictionary of headers - just user-agent string
+
+    Returns
+    -------
+    output : pandas dataframe
+        dataframe including price, title, posted and updated time, and text description of each guitar.
+
+    '''
     
     # set up lists to hold column values
     titles = []
@@ -120,7 +135,8 @@ def get_table(urls, headers=None):
                   'price' : prices, 
                   'posted' : posteds,
                   'updated' : updateds,
-                  'body' : descriptions}
+                  'body' : descriptions,
+                  'url' : urls}
     
     # convert to pd
     output = pd.DataFrame(table_dict)
@@ -130,18 +146,32 @@ def get_table(urls, headers=None):
 # Main Section
 ###########
 
-
+# user agent and urls for seagull and eastman search
 headers = {'user-agent' : 'Timur Guler search for seagull guitars tguler8@gmail.com'}
 seagull_url = 'https://charlottesville.craigslist.org/d/musical-instruments/search/msa?query=seagull'
 eastman_url = 'https://charlottesville.craigslist.org/d/musical-instruments/search/msa?query=eastman'
 
+# get webscraping results as bs4 objects
 all_seagulls = extract_html(seagull_url, headers=headers)
 all_eastmans = extract_html(eastman_url, headers=headers)
 
+# get urls of individual posting pages
 seagull_urls = conditional_bs4_results_key(all_seagulls, 'a', 'href', 'class', 'result-image')
 eastman_urls = conditional_bs4_results_key(all_eastmans, 'a', 'href', 'class', 'result-image')
+guitar_urls = seagull_urls + eastman_urls
 
-seagulls = get_table(seagull_urls, headers= headers)
-eastmans = get_table(eastman_urls, headers= headers)
+# get title, price, dates, and descriptions from post
+guitars = get_table(guitar_urls, headers= headers)
+
+# convert price to numeric
+guitars.price = guitars.price.str.replace('$', '').str.replace(',', '').astype(int)
+
+cutoff_date = date.today()-timedelta(days=21)
+guitars = guitars[(guitars.price < 1000) & (guitars.updated >= cutoff_date)]
+
+
+# save as csv
+guitars.to_csv('..\guitars.csv', index=False)
+
 
 
